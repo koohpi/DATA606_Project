@@ -1,0 +1,347 @@
+---
+title: "DATA 606 Data Project Proposal"
+author: "KoohPy <- Koohyar Pooladvand"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  word_document: default
+  pdf_document:  default
+editor_options:
+  markdown:
+    wrap: 72
+bibliography: references.bib
+---
+
+### Data Preparation
+
+In this project, I have chosen to work on breast cancer. There are
+various resources available regarding this particular topic, with the
+SEER being the most reliable one.
+
+The Surveillance, Epidemiology, and End Results (SEER) Program of the
+National Cancer Institute (NCI) collects and publishes cancer data
+through a coordinated system of strategically placed cancer registries,
+which cover nearly 30% of the US population.
+
+Currently, there are 18 SEER registries in the USA. This information can
+be found on the following website:
+<https://seer.cancer.gov/data/access.html>.
+
+I have also used the following repository to assist me with this
+project: <https://github.com/kohyarp/SEER_solid_tumor>. The Database
+contains tons of data, the goal of my investigation will be focused only
+on BREAST cancer for 2011-2015 and 2019-2020. SEER has a software \*STAT
+that I have used to import the data to a test that will be stored and
+used on my local computer. Additionally there is a GITHUB repository
+that I have used to some extent in this project. The repository is
+focused on all type of cancer, but my study is focused on BREAST, and I
+aim different question to answer.
+<https://github.com/zgalochkina/SEER_solid_tumor>
+
+```{r Code_initialization, echo= FALSE, results='hide', warning=FALSE, message=FALSE}
+required_packages <- c("RSQLite","devtools","tidyverse","DBI","dplyr","odbc","openintro","ggplot2","psych","reshape2","knitr","markdown","shiny","R.rsp","fivethirtyeight","RCurl", "stringr","readr","glue","data.table", "hflights", "jsonlite", "rjson", "XML", "xml2", "rvest", "readxl", "openxlsx", "httr2","kableExtra", "tinytex", "tidytext","textdata", "wordcloud", "plyr", "survival", "scales", "stats", "forcats", "gridExtra", "plotrix", "maptools", "mapproj", "rgeos", "rgdal", "rmarkdown", "R.utils", "utils", "skimr")
+
+not_installed <- required_packages[!(required_packages %in% installed.packages()[ , "Package"])]
+
+if(length(not_installed) == 0) {
+  print("All required packages are installed")
+} else {
+  print(paste(length(not_installed), "package(s) need to be installed.")) # Print the list of packages that need to be installed
+  tryCatch({
+    install.packages(not_installed, dependencies = TRUE)
+  }, error = function(e) {
+    cat("Error occurred during package installation:", e$message, "\n")
+  })
+}
+
+
+#remotes::install_github("cran/SEER2R")
+#remotes::install_github("cran/maptools")
+
+# define different paths to load the files 
+library(kableExtra)
+library(tinytex)
+library(textdata)
+library(tidytext)
+library(tidyr)
+library(ggplot2)
+library(wordcloud)
+library(dplyr)
+library(reshape2)
+library(plyr)       # for 'ddply' function
+library(tidyverse)  # filter, transform, plot data with 'ggplot2', 'tibble', 'tidyr', 'readr', 'purrr', 'dplyr' packages
+library(SEER2R)     # read SEER data files
+library(survival)   # Kaplan-Meier, Cox
+library(scales)     # transform data scale on plot
+library(stats)      # for 'fisher.test', 'aov' functions
+library(stringr)    # for 'str_replace_all' function
+library(forcats)    # for 'fct_recode' function
+library(gridExtra)  # for 'grid.arrange' function
+library(plotrix)    # for 'addtable2plot' function
+#library(maptools)   # map data to 50 states
+library(mapproj)    # map data to 50 states
+#library(rgeos)      # map data to 50 states
+#library(rgdal)      # map data to 50 states
+library(knitr)      # for reports
+library(R.utils)    # to unzip .gz population data file
+library(utils)      # to unzip .zip GIS files for maps
+library(skimr)
+
+#surpass the error message for dplyr to not show the masking
+suppressPackageStartupMessages(library(dplyr))
+
+```
+
+### Research question
+
+The primary question I aim to address is the survival rate of breast
+cancers and the influence of factors such as age, type, sex, and other
+parameters on this rate. Notably, a five-year threshold is commonly used
+to determine survival rates. Although my understanding of the rationale
+behind this five-year benchmark is limited, recognizing its significance
+has led me to divide the data into two separate datasets.
+
+The dataset spanning from 2011-2015 assumes that the status of all
+patients within that period is known up to the database’s current date
+in 2022. Additionally, I have selected the most recent data from
+2019-2020 as my target years for potential correlation and regression
+studies to estimate survival rates.
+
+This analysis is not scientific but rather a straightforward statistical
+exercise with no purpose beyond this course. However, I find the subject
+intriguing to investigate. I am uncertain if I will discover any
+significant relationships or correlations, and if found, whether they
+will be relevant, as I am not an expert in the field of breast cancer.
+My choice of topic is personal, as I have witnessed immediate family
+members diagnosed with this cancer, and I wish to gain a deeper
+understanding.
+
+The database for 2011-2015 contains approximately 303,000 rows with 36
+selected columns. I have chosen to focus solely on the 2019-2020 data,
+which comprises about 131,000 rows for prediction purposes. The question
+at hand is complex, and while I do not anticipate a definitive answer, I
+hope to uncover some patterns and test hypotheses, as well as engage in
+general data work, from tidying to cleaning.
+
+Furthermore, I plan to explore regression analysis to determine if I can
+identify any linear or non-linear relationships among the critical
+parameters.
+
+My knowledge of the subject is not extensive, but I am eager to learn as
+I progress.
+
+Some of the general parameters to consider are as follows: \* Years of
+diagnoses; \* Age groups at diagnosis; \* Cancer type (BREAST);
+
+Some other parameters are also available to be edited, but they are
+secondary.
+
+"to be added : adding a brief literature review to provide context for
+my research questions and hypotheses. This could include previous
+studies on breast cancer survival rates, factors affecting survival, and
+methods used for analysis."
+
+```{r, import_data, echo = TRUE}
+
+# Replace "file.txt" with the path to your text file
+directory <- "C:/Users/kohya/OneDrive/CUNY/DATA 606/DATA 606 Spring/Project"
+file_2020 <- "BREAST_2019-2020-updated.csv"
+file_serv <- "BREAST_2011-2015.csv"
+# Complete the file path
+full_path_serv <- file.path(directory, file_serv)
+full_path_eval<- file.path(directory, file_2020)
+
+
+BREAST_DF_surv <- read.csv(full_path_serv, header = TRUE,
+                      na.strings = "NA", check.names = FALSE)
+BREAST_DF_eval <- read.csv(full_path_eval, header = TRUE,
+                      na.strings = "NA", check.names = FALSE)
+
+
+# View the first few rows of the data frame
+kable(head(BREAST_DF_surv, 10))
+
+kable(head(BREAST_DF_eval, 10))
+
+```
+
+### Cases
+
+**What are the cases, and how many are there?** There are 131,395 cases
+in the BREAST cancer list of 2019-2020. And There are 303557 in
+2011-2015 dataset.
+
+"adding more exploratory data analysis (EDA) to understand the structure
+and distribution of variables in your dataset. This could include
+summary statistics, histograms, scatter plots, or other visualizations."
+
+By employing Exploratory Data Analysis (EDA) methods like summary
+statistics and graphical representations, we aim to reveal insights that
+will enhance our comprehension of breast cancer outcomes and therapeutic
+approaches. The dataset is rich with details, encompassing variables
+such as the patient’s age at operation, operation year, count of
+positive axillary nodes detected, and survival status post-treatment.
+
+[https://medium.com/\@navamisunil174/exploratory-data-analysis-of-breast-cancer-survival-prediction-dataset-c423e4137e38](https://medium.com/@navamisunil174/exploratory-data-analysis-of-breast-cancer-survival-prediction-dataset-c423e4137e38){.uri}
+
+### Data collection
+
+**Describe the method of data collection.** I used the SEER \*STAT to
+collect the data and export it as a TXT to be able to import it to the R
+for analyses. How SEER collects the data is explained in the following
+page in summary:
+
+-   The SEER program collects cancer incidence data through a network of
+    population-based cancer registries. These registries gather
+    information on patient demographics, primary tumor site, tumor
+    morphology, stage at diagnosis, and first course of treatment. They
+    also follow up with patients for vital status.
+
+-   By law, these facilities are required to report new cancer cases to
+    a central cancer registry, like a state cancer registry.
+
+-   [The SEER program releases new research data annually, based on
+    submissions from the previous year, and makes it available for
+    public use through a data request
+    process](https://seer.cancer.gov/data-software/). This comprehensive
+    approach ensures that the SEER database is a valuable resource for
+    cancer research and surveillance.
+
+<https://training.seer.cancer.gov/registration/data/collection.html>
+
+### Type of study
+
+This will be an observational study, information is gathered for
+different patients and I will be evaluating the available data to
+present and evaluate.
+
+"discussing potential limitations of observational studies, such as
+confounding variables and biases, and how you plan to address them in
+analysis."
+
+**What type of study is this (observational/experiment)?**
+
+### Data Source
+
+Data is collected from SEER program and I used SEER \*STAT software to
+glean them in a format that can be used and imported as TXT to R
+[@SEER2023].
+
+"providing additional details about the specific variables included in
+dataset and how they were collected"
+
+**If you collected the data, state self-collected. If not, provide a
+citation/link.**
+
+### Dependent Variable
+
+I am still looking into the data, it seems I will have a combination of
+both quantitative and qualitative data to work with. For example, while
+the number of tumors, and survival months are qualitative. Other like
+race, marital status, type of cancer are categorical. I am still looking
+to see if I can find any qualitative data.
+
+Categorical features, such as ‘Median household income ...’ ‘Marital
+Status,’ ‘Grade recode’ ‘laterality’ and ‘Radiatio recode' and so on are
+represented as objects (characters).
+
+Integer data types (int64) are assigned to ‘Patient ID,’ ‘Year of
+diagnosis,’ ‘total number of ...'.
+
+```{r variable_structure, echo=TRUE}
+
+# View the structure of the data frame
+#str(BREAST_DF_surv)
+skimr::skim(BREAST_DF_surv)
+skimr::skim(BREAST_DF_eval)
+
+
+# Find unique values in each column
+# Apply function to find unique values for each column
+
+unique_values <- data.frame(unique = apply(BREAST_DF_surv, 2, function(x) length(unique(x))),colnames = colnames(BREAST_DF_surv))
+
+# Check for NULL values
+any_null <- any(sapply(BREAST_DF_surv, is.null))
+
+# Check for NA values
+any_na <- any(sapply(BREAST_DF_surv, is.na))
+
+# Check if there are any NULL or NA values
+if (any_null || any_na) {
+  print("The data frame contains NULL or NA values.")
+} else {
+  print("The data frame does not contain any NULL or NA values.")
+}
+
+has_na_character <- any(sapply(BREAST_DF_surv, function(x) any(x == "NA")))
+
+if (has_na_character) {
+  print("The data frame contains character values of 'NA'.")
+} else {
+  print("The data frame does not contain character values of 'NA'.")
+}
+
+```
+
+**What is the response variable? Is it quantitative or qualitative?**
+
+### Independent Variable(s)
+
+### Relevant summary statistics
+
+**Provide summary statistics for each the variables. Also include
+appropriate visualizations related to your research question (e.g.
+scatter plot, boxplots, etc). This step requires the use of R, hence a
+code chunk is provided below. Insert more code chunks as needed.**
+
+```{r summary_statistic_1, echo=TRUE }
+
+DF_col_names <- colnames(BREAST_DF_surv)
+
+uniques_races <- unique(BREAST_DF_surv$`Race recode (W, B, AI, API)`)
+  
+BREAST_DF_surv |> 
+  ggplot(mapping = aes(x=`Race recode (W, B, AI, API)`)) +
+  geom_bar(stat = "count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label = after_stat(count)), stat = "count", vjust = -0.5) +
+  ylim(0, 246000)
+
+BREAST_DF_perc_surv <- BREAST_DF_surv %>%
+  group_by(`Race recode (W, B, AI, API)`) %>%
+  dplyr::summarise(count = dplyr::n()) %>%  # Calculate count per group
+  ungroup() %>%  # Ungroup the data
+  mutate(total_count = sum(count)) %>%  # Calculate total count
+  mutate(percentage = count / total_count * 100)  # Calculate percentage using total count
+
+# Plot the percentages
+ggplot(BREAST_DF_perc_surv, aes(x = `Race recode (W, B, AI, API)`, y = percentage)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.5, color = "black") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Percentage of Population by Race between 2011-2015", x = "Race recode (W, B, AI, API)", y = "Percentage") + ylim (0,90)
+
+BREAST_DF_eval |> 
+  ggplot(mapping = aes(x=`Race recode (W, B, AI, API)`)) +
+  geom_bar(stat = "count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label = after_stat(count)), stat = "count", vjust = -0.5) +
+  ylim(0, 104000)
+
+BREAST_DF_perc_eval <- BREAST_DF_eval %>%
+  group_by(`Race recode (W, B, AI, API)`) %>%
+  dplyr::summarise(count = dplyr::n()) %>%  # Calculate count per group
+  ungroup() %>%  # Ungroup the data
+  mutate(total_count = sum(count)) %>%  # Calculate total count
+  mutate(percentage = count / total_count * 100)  # Calculate percentage using total count
+
+# Plot the percentages
+ggplot(BREAST_DF_perc_eval, aes(x = `Race recode (W, B, AI, API)`, y = percentage)) +
+  geom_bar(stat = "identity", fill = "plum") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.5, color = "black") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Percentage of Population by  between 2019-2022", x = "Race recode (W, B, AI, API)", y = "Percentage") + ylim (0,90)
+
+
+```
